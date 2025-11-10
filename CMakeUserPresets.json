@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ninja-vcpkg-local",
+      "inherits": "ninja-vcpkg",
+      "displayName": "Ninja vcpkg (Local)",
+      "environment": {
+        "VCPKG_ROOT": "C:/Dev/vcpkg"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ninja-vcpkg-debug-local",
+      "configurePreset": "ninja-vcpkg-local",
+      "displayName": "Build (Debug)",
+      "description": "Build with Ninja/vcpkg (Debug)",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ninja-vcpkg-release-local",
+      "configurePreset": "ninja-vcpkg-local",
+      "displayName": "Build (Release)",
+      "description": "Build with Ninja/vcpkg (Release)",
+      "configuration": "Release"
+    }
+  ]
+}
