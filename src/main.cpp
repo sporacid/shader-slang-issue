@@ -1,11 +1,36 @@
+#include <fstream>
 #include <print>
+#include <sstream>
+#include <string>
+#include <string_view>
 
 #include "slang-com-ptr.h"
 #include "slang.h"
 
+bool read_file(const std::string_view path, std::string& content)
+{
+    const std::ifstream stream(path.data());
+
+    if (!stream.is_open())
+    {
+        return false;
+    }
+
+    std::stringstream string;
+    string << stream.rdbuf();
+    content = string.str();
+    return !stream.bad();
+}
+
 int main(const int argc, const char* argv[])
 {
     SlangResult slang_result = SLANG_OK;
+
+    std::string shader_data;
+    if (not read_file("shader.slang", shader_data))
+    {
+        return -1;
+    }
 
     Slang::ComPtr<slang::IGlobalSession> global_session;
     slang::createGlobalSession(global_session.writeRef());
@@ -24,40 +49,45 @@ int main(const int argc, const char* argv[])
         return -1;
     }
 
-    constexpr auto make_predicate = [](const slang::CompilerOptionName compiler_option_name) {
-        return [=](const slang::CompilerOptionEntry& entry) {
-            return entry.name == compiler_option_name;
-        };
-    };
+    Slang::ComPtr<slang::ISession> session;
+    slang_result = global_session->createSession(session_desc, session.writeRef());
 
-    std::println("target count: {}", session_desc.targetCount);
-
-    for (std::size_t index = 0; index < session_desc.targetCount; ++index)
+    if (SLANG_FAILED(slang_result))
     {
-        const slang::TargetDesc& target_desc = session_desc.targets[index];
+        return -1;
+    }
 
-        std::println("target: {}", index);
-        std::println("  format: {}", static_cast<int>(target_desc.format));
-        std::println("  profile: {}", static_cast<int>(target_desc.profile));
+    slang::IModule* module = session->loadModuleFromSourceString(
+        "shader",
+        "shader.slang",
+        shader_data.data(),
+        nullptr);
 
-        const auto target = std::ranges::find_if(
-            target_desc.compilerOptionEntries,
-            target_desc.compilerOptionEntries + target_desc.compilerOptionEntryCount,
-            make_predicate(slang::CompilerOptionName::Target));
+    if (module == nullptr)
+    {
+        return -1;
+    }
 
-        if (target != nullptr)
+    for (std::int32_t index_entry_point = 0; index_entry_point < module->getDefinedEntryPointCount(); ++index_entry_point)
+    {
+        Slang::ComPtr<slang::IEntryPoint> entry_point;
+        slang_result = module->getDefinedEntryPoint(index_entry_point, entry_point.writeRef());
+
+        if (SLANG_FAILED(slang_result))
         {
-            std::println("  target option: {}", target->value.intValue0);
+            continue;
         }
 
-        const auto profile = std::ranges::find_if(
-            target_desc.compilerOptionEntries,
-            target_desc.compilerOptionEntries + target_desc.compilerOptionEntryCount,
-            make_predicate(slang::CompilerOptionName::Profile));
-
-        if (profile != nullptr)
+        for (std::int32_t index_target = 0; index_target < session_desc.targetCount; ++index_target)
         {
-            std::println("  profile option: {}", profile->value.intValue0);
+            if (slang::ProgramLayout* program_layout = module->getLayout(index_target))
+            {
+                if (slang::EntryPointLayout* entry_point_layout = program_layout->getEntryPointByIndex(index_entry_point))
+                {
+                    std::println("entry point found for target: name={} stage={}",
+                        entry_point->getFunctionReflection()->getName(), static_cast<int>(entry_point_layout->getStage()));
+                }
+            }
         }
     }
 
